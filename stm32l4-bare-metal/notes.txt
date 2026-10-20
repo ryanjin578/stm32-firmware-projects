@@ -1,0 +1,98 @@
+2) c for hardware
+    changing and testing bits
+	set -> reg |= (1 << n)		*forces state
+	clear -> reg &= ~(1 << n)
+	toggling -> reg ^= (1 << n)	*depends on current state
+
+    bit masking
+	
+
+
+3) electronics
+
+
+
+4) pins and registers
+    GPIOA → MODER → MODE5[1:0] → 01
+    (port)  (register) (field for pin 5) (value = "output")
+
+    STM32L476
+    ├── Cortex-M4 core (ARM's part, same on every Cortex-M4)
+    │   ├── SysTick ── CTRL, LOAD, VAL
+    │   └── NVIC ───── ISER
+    │
+    └── ST peripherals (ST's part, each clocked via RCC)
+        ├── RCC ───── AHB2ENR, APB1ENR1, APB2ENR   ← power switches for the rest
+        ├── AHB2 bus
+        │   ├── GPIOA ── MODER, OTYPER, OSPEEDR, PUPDR, ODR, BSRR   (LED, PA5)
+        │   └── GPIOC ── MODER, PUPDR, IDR                         (button, PC13)
+        ├── APB1 bus
+        │   └── TIM2 ─── CR1, DIER, SR, PSC, ARR, CNT
+        └── APB2 bus
+            ├── SYSCFG ─ EXTICR[3]
+            └── EXTI ─── IMR1, FTSR1, PR1
+
+	peripheral registers?
+
+
+5) time and timers
+    registers
+	PSC (prescaler) -> how fast the counter ticks
+	    f_tick = f_clk / (PSC + 1)
+
+	ARR (auto reload register) -> how high the counter goes before wrapping
+	    a) CNT counts starting from 0
+	    b) hits ARR
+	    c) resets to 0
+	    d) fires update event (interrupt flag UIF)
+	    period = ARR + 1 ticks
+
+	combined -> f_update = f_clk / ((PSC + 1) (ARR +  1))	
+
+
+6) interrupts
+    button interrupt
+	button bounce -> interrupt is sensitive
+
+
+7) button input
+    code structure (generally)
+	int main(void) {
+	    // reset and clock control (RCC) -> enabling GPIO
+
+	    // setup control registers for LED output
+	    // moder, otype, ospeed, pupdr
+		
+	    // setup control registers for input
+	    // moder, pupdr (if using external button)
+
+	    while (1) {
+		if (condition) {
+		    // turn on
+		} else {
+		    // turn off
+		}
+	    }
+	}
+
+
+general:
+    literals
+	0b -> binary
+	0x -> hex
+	0 -> octal
+    
+    *each hex digit maps to exactly 4 bits, just write hex val in binary
+
+    '->' ex. GPIOA->MODER shorthand for (*GPIOA).MODER
+
+    volatile -> value of variable can change outside the code, rw from mem every time
+	volatile uint32_t *p -> the DATA that p points to is volatile
+	    address can be cached, variable value cannot
+	uint32_t * volatile p -> the POINTER itself is volatile
+	    address cannot be cached, variable value can
+	    compiler must reread which address holds p every time
+	
+	*volatile applies to whatever is immediately left of it or right if nothing is on the left
+
+    pointer variables -> stores address, type tells the compiler what type to expect

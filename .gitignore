@@ -57,3 +57,4 @@ dkms.conf
 # STM32Cube IDE build output
 Debug/
 Release/
+*.launch
