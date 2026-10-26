@@ -19,8 +19,19 @@
 #include <stdint.h>
 #include "stm32l476xx.h"
 
-static void delay(volatile uint32_t count) {
-	while (count--) {
+#define SYSCLK_HZ 4000000U
+
+static volatile uint32_t ms_ticks = 0;
+
+void SysTick_Handler(void)
+{
+    ms_ticks++;
+}
+
+static void delay_ms(uint32_t ms)
+{
+	uint32_t start = ms_ticks;
+	while ((ms_ticks - start) < ms) {
 	}
 }
 
@@ -32,9 +43,11 @@ int main(void) {
 	GPIOA->MODER &= ~GPIO_MODER_MODE5;
 	GPIOA->MODER |= GPIO_MODER_MODE5_0;
 
+	SysTick_Config(SYSCLK_HZ / 1000U);
+
 	while (1) {
 		// 3. Toggle PA5
 		GPIOA->ODR ^= GPIO_ODR_OD5;
-		delay(500000);
+		delay_ms(500);
 	}
 }
