@@ -23,31 +23,37 @@
 
 static volatile uint32_t ms_ticks = 0;
 
-void SysTick_Handler(void)
-{
+void SysTick_Handler(void) {
     ms_ticks++;
 }
 
-static void delay_ms(uint32_t ms)
-{
-	uint32_t start = ms_ticks;
-	while ((ms_ticks - start) < ms) {
+static void tim2_init(void) {
+	RCC->APB1ENR1 |= RCC_APB1ENR1_TIM2EN;
+	TIM2->PSC = 3999U;
+	TIM2->ARR = 999U;
+	TIM2->EGR = TIM_EGR_UG;							// force update event
+	TIM2->SR = ~TIM_SR_UIF;
+	TIM2->DIER |= TIM_DIER_UIE;						// update interrupt enable
+	NVIC_EnableIRQ(TIM2_IRQn);
+	TIM2->CR1 |= TIM_CR1_CEN;
+}
+
+void TIM2_IRQHandler(void) {
+	if (TIM2->SR & TIM_SR_UIF) {
+		TIM2->SR = ~TIM_SR_UIF;
+		GPIOA->ODR ^= GPIO_ODR_OD5;
 	}
 }
 
 int main(void) {
-	// 1. Enable GPIOA clock
-	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
+	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;			// enable GPIOA clock
 
-	// 2. PA5 -> output
 	GPIOA->MODER &= ~GPIO_MODER_MODE5;
 	GPIOA->MODER |= GPIO_MODER_MODE5_0;
 
 	SysTick_Config(SYSCLK_HZ / 1000U);
+	tim2_init();
 
 	while (1) {
-		// 3. Toggle PA5
-		GPIOA->ODR ^= GPIO_ODR_OD5;
-		delay_ms(500);
 	}
 }

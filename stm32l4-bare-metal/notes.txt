@@ -1,10 +1,35 @@
+1) high level
+    mcu -> CPU + memory + peripherals on one chip
+    mpu -> external memory and MMU to run full OS for heavier computing
+
+    memory maps -> hardware control looks like memory to CPU
+	Finding an address: base + offset (both from RM0351)
+	    GPIOA base   = 0x4800 0000
+  	    ODR offset   =        0x14
+           	           -----------
+  	    GPIOA->ODR   = 0x4800 0014
+
+    mcu boot and vector table
+	vector table (ARM mcus) -> arr of 32 bit addresses of interrupt handlers
+	    1st 32 bit value -> initial stack pointer
+	    2nd 32 bit value -> address of boot function to execute (firmware entry point)
+
+    linker -> links machine code to memory addresses -> produces .elf file
+	also contains (1) symbol names (2) debug info (mapping machine code to C lines)
+
+
 2) c for hardware
     changing and testing bits
 	set -> reg |= (1 << n)		*forces state
 	clear -> reg &= ~(1 << n)
 	toggling -> reg ^= (1 << n)	*depends on current state
+    
+    *for readability, define function to set pin mode
 
     bit masking
+
+    read modify write
+	
 	
 
 
@@ -34,9 +59,52 @@
 
 	peripheral registers?
 
+    ODR/BSRR registers and avoiding ISR override
+
+    AHB/APB buses
+	AHB (adv hi-perf bus) -> fast bus
+	APB (adv peripheral bus) -> slower, connects to AHB through bridge
+
+	*each bus has its own RCC enable register
+
+    	Cortex-M4 core
+  	    │  STR instruction: address 0x4000002C, data 999
+      	    │  Address is in the peripheral region, so it goes out the core's S-bus
+      	    ▼
+    	AHB bus matrix
+      	    │  Decodes the address, routes the transfer to the AHB1 bus
+      	    ▼
+    	AHB1 bus  (clocked by HCLK)
+      	    │  Address decode selects the AHB/APB1 bridge
+    	    ▼
+    	AHB/APB1 bridge
+      	    │  AHB slave on one side, the only APB1 master on the other
+      	    │  Converts the transfer to the APB protocol, re-timed to PCLK1
+      	    ▼
+    	APB1 bus  (clocked by PCLK1)
+      	    │  Setup phase:  address, write signal and data driven, TIM2 selected
+      	    │  Access phase: enable asserted, transfer completes
+      	    ▼
+    	TIM2
+             Decodes offset 0x2C and latches 999 into ARR
+             (into the preload copy if ARPE = 1, otherwise straight into the active ARR)
+
+    RCC (Reset and Clock control) -> generates clocks, turns them on and off per peripheral
+
 
 5) time and timers
+    f2 (systick) -> counter built into CPU that counts RCC clock's pulses
+	24 bits, counts down
+	STK_LOAD register -> specifies the start value to load into register when 0
+
+    f3 (tim2) -> systick can at most run one period, if we need multiple periods at once we use timx
+	UEV -> update event -> rollover event when counter hits upper limit
+	UIF -> update flag -> set when rollover event occurs, cleared by software
+
     registers
+	preload (copy) -> handles writes while keeping another copy running, copied into shadow
+			  at next UEV
+
 	PSC (prescaler) -> how fast the counter ticks
 	    f_tick = f_clk / (PSC + 1)
 
@@ -48,11 +116,24 @@
 	    period = ARR + 1 ticks
 
 	combined -> f_update = f_clk / ((PSC + 1) (ARR +  1))	
+		    (PSC + 1)(ARR + 1) = f_clk / f_interrupt
 
 
 6) interrupts
     button interrupt
 	button bounce -> interrupt is sensitive
+
+    status flags -> set by hardware, cleared by software
+	separate from its enable bit
+	
+    *when flag AND enable are both 1, request wire goes high and NVIC interrupts CPU
+
+    vector table -> an array of 32 bit addresses at the start of flash
+	when exception or interrupt occurs, CPU reads table and jumps to specific address
+
+	.weak -> marks symbol as replaceable
+	.thumb_set -> points to Default_Handler address (infinite loop) unless something replaces it
+
 
 
 7) button input
@@ -96,3 +177,21 @@ general:
 	*volatile applies to whatever is immediately left of it or right if nothing is on the left
 
     pointer variables -> stores address, type tells the compiler what type to expect
+
+    directory traversal -> ./ (stay) ../ (move up)
+    
+    RM0351 register access codes
+    +--------+---------------------------+----------------------------------+
+    | Code   | Read                      | Write                            |
+    +--------+---------------------------+----------------------------------+
+    | rw     | returns current value     | sets the value                   |
+    | r      | returns current value     | ignored                          |
+    | w      | not meaningful            | 1 triggers an action             |
+    | rc_w0  | returns current value     | 0 clears the bit, 1 no effect    |
+    | rc_w1  | returns current value     | 1 clears the bit, 0 no effect    |
+    | rc_r   | returns value, then clears| ignored                          |
+    | rs     | returns current value     | 1 sets the bit, 0 no effect      |
+    | Res.   | reserved                  | keep at reset value              |
+    +--------+---------------------------+----------------------------------+
+   
+
